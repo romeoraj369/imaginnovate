@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -27,13 +29,14 @@ import com.imaginnovate.entity.PhoneNumber;
 import com.imaginnovate.repository.BatchErrorRepo;
 import com.imaginnovate.repository.BatchProcessRepo;
 import com.imaginnovate.repository.EmployeeRepo;
-import com.imaginnovate.utils.EntityCounter;
 import com.opencsv.CSVReader;
 import com.opencsv.bean.CsvToBean;
 import com.opencsv.bean.CsvToBeanBuilder;
 
 @Service
 public class EmployeeService {
+
+	private static final Logger logger = LoggerFactory.getLogger(EmployeeService.class);
 
 	@Autowired
 	private EmployeeRepo employeeRepo;
@@ -47,8 +50,6 @@ public class EmployeeService {
 //	@Scheduled(cron = "0 30 11 * * ?")
 	@Scheduled(initialDelay = 0, timeUnit = TimeUnit.MICROSECONDS)
 	public void process() {
-		EntityCounter.resetCounts();
-
 		long insertCounter = 0;
 		long updateCounter = 0;
 		long errorCounter = 0;
@@ -62,8 +63,7 @@ public class EmployeeService {
 
 			BatchProcess beginPro = new BatchProcess("Employee Upsert batch process", Timestamp.from(Instant.now()));
 			batchProcessRepo.save(beginPro);
-			System.out.println(String.valueOf(beginPro.toString()));
-
+			logger.info(beginPro.toString());
 			CsvToBean<Employee> csvToBean = new CsvToBeanBuilder<Employee>(reader).withType(Employee.class)
 					.withIgnoreLeadingWhiteSpace(true).build();
 			List<Employee> employees = csvToBean.parse();
@@ -94,22 +94,18 @@ public class EmployeeService {
 					BatchErrors err = new BatchErrors(Timestamp.from(Instant.now()), "employee.csv",
 							"Error processing Employee ID: " + eId);
 					err = batchErrorRepo.save(err);
-					System.out.println(String.valueOf(err.toString()));
-
+					logger.info(err.toString());
 				}
 			}
 			String processedName = getFormattedFileName();
-//			file.renameTo(new File("D:\\Eclipse\\Workspace\\Ec-2\\ImagInnovate\\" + processedName));
 			updateCsvFileName(file, "D:\\Eclipse\\Workspace\\Ec-2\\ImagInnovate\\" + processedName);
-			// employeeRepo.saveAll(csvToBean.parse());
 			BatchProcess endProcess = new BatchProcess("employee.csv", Timestamp.from(Instant.now()), processedName,
 					insertCounter, updateCounter, errorCounter);
-			endProcess =	batchProcessRepo.save(endProcess);
-			System.out.println(String.valueOf(endProcess.toString()));
+			endProcess = batchProcessRepo.save(endProcess);
+			logger.info(endProcess.toString());
 
-		} catch (IOException ignore) {
-			ignore.printStackTrace();
-
+		} catch (Exception e) {
+			logger.error("Exception occured while processing EmployeeService.process", e);
 		}
 	}
 
@@ -131,6 +127,7 @@ public class EmployeeService {
 				writer.write(line);
 				writer.newLine();
 			}
+			logger.info("CSV File modified :" + newFile.getPath());
 		}
 	}
 
